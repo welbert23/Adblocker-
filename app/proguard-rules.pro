@@ -1,0 +1,2 @@
+-keepclassmembers class com.adblocker.AdBlockVpnService { *; }
+-keep class com.adblocker.BlocklistDatabase { *; }

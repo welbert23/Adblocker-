@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BlockerPlus" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/button_green</item>
+        <item name="colorPrimaryVariant">#FF00c853</item>
+        <item name="colorOnPrimary">#FFffffff</item>
+        <item name="colorSecondary">@color/button_green</item>
+        <item name="colorSecondaryVariant">#FF00c853</item>
+        <item name="colorOnSecondary">#FFffffff</item>
+        <item name="android:statusBarColor">#FF1a1a2e</item>
+        <item name="android:navigationBarColor">#FF1a1a2e</item>
+    </style>
+</resources>
