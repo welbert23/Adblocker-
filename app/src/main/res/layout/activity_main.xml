@@ -4,89 +4,346 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp"
     android:background="#1a1a2e">
 
-    <ImageView
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:src="@drawable/ic_shield"
-        android:layout_marginBottom="16dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Blocker+"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:textColor="#ffffff"
-        android:layout_marginBottom="4dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="HTTP/HTTPS Proxy Ad Blocker"
-        android:textSize="14sp"
-        android:textColor="#8888aa"
-        android:layout_marginBottom="32dp" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Unprotected"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:textColor="#ff4444"
-        android:layout_marginBottom="8dp" />
-
-    <TextView
-        android:id="@+id/blockedText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Tap Start to enable ad blocking"
-        android:textSize="14sp"
-        android:textColor="#aaaacc"
-        android:layout_marginBottom="4dp" />
-
-    <TextView
-        android:id="@+id/proxyInfoText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="12sp"
-        android:textColor="#666688"
-        android:layout_marginBottom="40dp" />
-
-    <com.google.android.material.switchmaterial.SwitchMaterial
-        android:id="@+id/toggleSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Block Adult Content"
-        android:textColor="#ffffff"
-        app:thumbTint="@color/switch_thumb"
-        app:trackTint="@color/switch_track"
-        android:checked="true"
-        android:layout_marginBottom="24dp" />
-
-    <Button
-        android:id="@+id/startStopButton"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="START"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:textColor="#ffffff"
-        android:backgroundTint="@color/button_green"
-        android:layout_marginBottom="16dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="VPN tunnel + local HTTP/HTTPS proxy\nRoutes all traffic through filter\nNo root required"
-        android:textSize="12sp"
-        android:textColor="#666688"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
         android:gravity="center"
-        android:lineSpacingExtra="2dp" />
+        android:padding="24dp">
+
+        <ImageView
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/ic_shield"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Blocker+"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="#ffffff"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="VPN + DNS Ad Blocker"
+            android:textSize="12sp"
+            android:textColor="#8888aa"
+            android:layout_marginBottom="20dp" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Unprotected"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#ff4444"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/blockedText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap Start to enable"
+            android:textSize="13sp"
+            android:textColor="#aaaacc"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:id="@+id/statsSummary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="#666688"
+            android:layout_marginBottom="16dp" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/toggleSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Block Adult Content"
+            android:textColor="#ffffff"
+            app:thumbTint="@color/switch_thumb"
+            app:trackTint="@color/switch_track"
+            android:checked="true"
+            android:layout_marginBottom="16dp" />
+
+        <Button
+            android:id="@+id/startStopButton"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="START"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#ffffff"
+            android:backgroundTint="@color/button_green" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#333355" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="#16162a">
+
+        <Button
+            android:id="@+id/tabStats"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Stats"
+            android:textSize="13sp"
+            android:textColor="#8888aa"
+            android:backgroundTint="#00000000"
+            android:gravity="center" />
+
+        <Button
+            android:id="@+id/tabBlocklist"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Blocklist"
+            android:textSize="13sp"
+            android:textColor="#8888aa"
+            android:backgroundTint="#00000000"
+            android:gravity="center" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#333355" />
+
+    <FrameLayout
+        android:id="@+id/tabContent"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:id="@+id/panelStats"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Blocking Statistics"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#ffffff"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="12dp"
+                    android:background="#222244"
+                    android:layout_marginEnd="6dp">
+
+                    <TextView android:id="@+id/statTotalBlocked"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="28sp"
+                        android:textStyle="bold"
+                        android:textColor="#00e676" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Total Blocked"
+                        android:textSize="11sp"
+                        android:textColor="#8888aa" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="12dp"
+                    android:background="#222244"
+                    android:layout_marginEnd="6dp">
+
+                    <TextView android:id="@+id/statToday"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="28sp"
+                        android:textStyle="bold"
+                        android:textColor="#ffeb3b" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Today"
+                        android:textSize="11sp"
+                        android:textColor="#8888aa" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="12dp"
+                    android:background="#222244">
+
+                    <TextView android:id="@+id/statWeek"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="28sp"
+                        android:textStyle="bold"
+                        android:textColor="#448aff" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="This Week"
+                        android:textSize="11sp"
+                        android:textColor="#8888aa" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Block Type Breakdown"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#ffffff"
+                android:layout_marginBottom="4dp" />
+
+            <TextView android:id="@+id/statBreakdown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Domain: 0  |  Keyword: 0  |  Custom: 0"
+                android:textSize="12sp"
+                android:textColor="#8888aa"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Top Blocked Sites"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#ffffff"
+                android:layout_marginBottom="4dp" />
+
+            <TextView android:id="@+id/statTopSites"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:text="No blocked sites yet"
+                android:textSize="12sp"
+                android:textColor="#8888aa" />
+
+            <Button android:id="@+id/btnExportCsv"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:text="Export CSV"
+                android:textSize="13sp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#333366"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/panelBlocklist"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Custom Blocklist"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#ffffff"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <EditText android:id="@+id/inputCustomDomain"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:hint="Enter domain (e.g. example.com)"
+                    android:textSize="13sp"
+                    android:textColor="#ffffff"
+                    android:textColorHint="#666688"
+                    android:background="#222244"
+                    android:padding="12dp"
+                    android:inputType="textUri"
+                    android:layout_marginEnd="8dp" />
+
+                <Button android:id="@+id/btnAddDomain"
+                    android:layout_width="56dp"
+                    android:layout_height="44dp"
+                    android:text="+"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="#ffffff"
+                    android:backgroundTint="#00e676" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Your custom blocked domains:"
+                android:textSize="13sp"
+                android:textColor="#aaaacc"
+                android:layout_marginBottom="4dp" />
+
+            <TextView android:id="@+id/customDomainList"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:text="No custom domains added yet"
+                android:textSize="12sp"
+                android:textColor="#8888aa"
+                android:background="#222244"
+                android:padding="12dp"
+                android:scrollbars="vertical" />
+        </LinearLayout>
+
+
+
+    </FrameLayout>
 
 </LinearLayout>

@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -25,6 +26,11 @@ class AdBlockVpnService : VpnService() {
     @Volatile private var lastBlockedDomain: String? = null
     private var proxyServer: ProxyServer? = null
 
+    private var customBlockList: Set<String> = emptySet()
+    private var adultBlockList: Set<String> = BlocklistDatabase.ADULT_DOMAINS
+    private var adultKeywords: Set<String> = BlocklistDatabase.ADULT_KEYWORDS
+    private var gamblingKeywords: Set<String> = BlocklistDatabase.GAMBLING_KEYWORDS
+
     companion object {
         const val ACTION_START = "com.adblocker.START"
         const val ACTION_STOP = "com.adblocker.STOP"
@@ -43,10 +49,7 @@ class AdBlockVpnService : VpnService() {
         when (intent?.action) {
             ACTION_START -> startVpn()
             ACTION_STOP -> stopVpn()
-            ACTION_UPDATE_SETTINGS -> {
-                val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
-                blockAdult = prefs.getBoolean("adult_blocking", true)
-            }
+            ACTION_UPDATE_SETTINGS -> loadSettings()
         }
         return START_STICKY
     }
@@ -65,13 +68,54 @@ class AdBlockVpnService : VpnService() {
         }
     }
 
+    private fun loadSettings() {
+        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+        blockAdult = prefs.getBoolean("adult_blocking", true)
+        customBlockList = loadCustomBlocklist(prefs)
+        adultBlockList = BlocklistDatabase.ADULT_DOMAINS
+        adultKeywords = BlocklistDatabase.ADULT_KEYWORDS
+        gamblingKeywords = BlocklistDatabase.GAMBLING_KEYWORDS
+        if (running) restartProxy()
+    }
+
+    private fun loadCustomBlocklist(prefs: SharedPreferences): Set<String> {
+        val json = prefs.getString("custom_blocklist", "[]") ?: "[]"
+        return try {
+            val trimmed = json.trim()
+            if (trimmed.startsWith("[")) {
+                trimmed.removeSurrounding("[", "]")
+                    .split(",")
+                    .map { it.trim().removeSurrounding("\"").lowercase() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            } else emptySet()
+        } catch (_: Exception) { emptySet() }
+    }
+
+    private fun getMergedBlocklist(): Set<String> {
+        val merged = mutableSetOf<String>()
+        merged.addAll(BlocklistDatabase.AD_DOMAINS)
+        merged.addAll(BlocklistDatabase.DOH_DOMAINS)
+        if (blockAdult) {
+            merged.addAll(adultBlockList)
+        }
+        merged.addAll(customBlockList)
+        return merged
+    }
+
+    private fun restartProxy() {
+        try {
+            proxyServer?.stop()
+            proxyServer = ProxyServer(getMergedBlocklist(), PROXY_PORT).also { it.start() }
+        } catch (_: Exception) {}
+    }
+
     private fun startVpn() {
         try {
-            val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
-            blockAdult = prefs.getBoolean("adult_blocking", true)
+            loadSettings()
 
             proxyServer?.stop()
-            proxyServer = ProxyServer(BlocklistDatabase.AD_DOMAINS, PROXY_PORT).also { it.start() }
+            proxyServer = ProxyServer(getMergedBlocklist(), PROXY_PORT).also { it.start() }
 
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -154,8 +198,6 @@ class AdBlockVpnService : VpnService() {
                         }
                     }
                 }
-                // IPv6 traffic (including DNS) is forwarded unmodified
-                // to avoid breaking apps. Only IPv4 DNS gets filtered.
 
                 output.write(pkt, 0, len)
                 output.flush()
@@ -171,11 +213,11 @@ class AdBlockVpnService : VpnService() {
             val srcIp = ByteArray(4); val dstIp = ByteArray(4)
             buf.position(12); buf.get(srcIp)
             buf.position(16); buf.get(dstIp)
-            val srcPort = buf.getShort(ihl).toInt() and 0xFFFF
+            val srcPort = ((pkt[ihl].toInt() and 0xFF) shl 8) or (pkt[ihl + 1].toInt() and 0xFF)
 
             val dnsStart = ihl + 8
             val dnsLen = totalLen - dnsStart
-            if (dnsLen <= 0) return
+            if (dnsLen <= 12) return
             buf.position(dnsStart)
             val dnsData = ByteArray(dnsLen)
             buf.get(dnsData)
@@ -183,17 +225,27 @@ class AdBlockVpnService : VpnService() {
             val dnsPkt = DnsPacket(ByteBuffer.wrap(dnsData))
             if (dnsPkt.isResponse) return
 
-            if (dnsPkt.shouldBlock(BlocklistDatabase.AD_DOMAINS, BlocklistDatabase.ADULT_DOMAINS, BlocklistDatabase.SAFE_DOMAINS, blockAdult)) {
+            if (dnsPkt.shouldBlock(
+                    BlocklistDatabase.AD_DOMAINS,
+                    adultBlockList,
+                    adultKeywords,
+                    gamblingKeywords,
+                    customBlockList,
+                    BlocklistDatabase.SAFE_DOMAINS,
+                    blockAdult
+                )) {
                 val resp = dnsPkt.asResponse("0.0.0.0")
                 writeUdpResponse(out, srcIp, srcPort, dstIp, 53, resp)
                 blockedCount.incrementAndGet()
                 lastBlockedDomain = dnsPkt.questions.firstOrNull()
                 updateNotification()
+                saveBlockStats(dnsPkt.questions.firstOrNull())
+            } else if (dnsPkt.questionTypes.any { it == 64 || it == 65 }) {
+                val resp = dnsPkt.asEmptyResponse()
+                writeUdpResponse(out, srcIp, srcPort, dstIp, 53, resp)
             } else {
                 val sock = DatagramSocket()
                 try {
-                    // protect() is critical: routes this socket outside the VPN tunnel
-                    // so DNS queries don't loop back through the VPN interface
                     protect(sock)
                     sock.soTimeout = 5000
                     sock.send(DatagramPacket(dnsData, dnsLen, InetAddress.getByAddress(dstIp), 53))
@@ -204,6 +256,42 @@ class AdBlockVpnService : VpnService() {
                     writeUdpResponse(out, srcIp, srcPort, dstIp, 53, ByteBuffer.wrap(rd))
                 } catch (_: Exception) {} finally { sock.close() }
             }
+        } catch (_: Exception) {}
+    }
+
+    private fun saveBlockStats(domain: String?) {
+        if (domain == null) return
+        try {
+            val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val total = prefs.getInt("stat_total_blocked", 0) + 1
+            val todayCount = prefs.getInt("stat_today_$today", 0) + 1
+            val week = prefs.getStringSet("stat_week_domains", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+            week.add(domain)
+
+            val topSites = prefs.getString("stat_top_sites", "{}") ?: "{}"
+            val siteCounts = mutableMapOf<String, Int>()
+            try {
+                val entries = topSites.removeSurrounding("{", "}")
+                    .split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                for (entry in entries) {
+                    val parts = entry.split(":")
+                    if (parts.size == 2) {
+                        siteCounts[parts[0].trim().removeSurrounding("\"")] = parts[1].trim().toIntOrNull() ?: 0
+                    }
+                }
+            } catch (_: Exception) {}
+            siteCounts[domain] = (siteCounts[domain] ?: 0) + 1
+            val topSitesStr = siteCounts.entries.joinToString(",") { "\"${it.key}\":${it.value}" }
+
+            prefs.edit()
+                .putInt("stat_total_blocked", total)
+                .putInt("stat_today_$today", todayCount)
+                .putStringSet("stat_week_domains", week)
+                .putString("stat_top_sites", "{$topSitesStr}")
+                .apply()
         } catch (_: Exception) {}
     }
 
@@ -257,4 +345,6 @@ class AdBlockVpnService : VpnService() {
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, n)
         } catch (_: Exception) {}
     }
+
+    fun getBlockedCount(): Long = blockedCount.get()
 }

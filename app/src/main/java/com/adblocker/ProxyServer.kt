@@ -10,12 +10,48 @@ import java.util.concurrent.Executors
 
 class ProxyServer(
     private val blocklist: Set<String>,
-    private val port: Int
+    private val port: Int,
+    private val protectSocket: ((java.net.Socket) -> Unit)? = null
 ) {
     private var serverSocket: ServerSocket? = null
     private val executor = Executors.newCachedThreadPool()
     private var running = false
     var blockedCount = 0L
+
+    companion object {
+        val BLOCKED_URL_PATTERNS: Set<String> = setOf(
+            "/redirect?", "/redirect/", "/redirect-",
+            "/go.php?", "/go/?", "/go-",
+            "/out.php?", "/out/?", "/out-",
+            "/click?", "/click/", "/click-",
+            "/visit?", "/visit/", "/visit-",
+            "/link?", "/link/", "/link-",
+            "/track?", "/track/", "/tracking/", "/track-",
+            "/adclick?", "/adclick/",
+            "/pop?", "/popup?", "/popunder?",
+            "/exit.php?", "/exit/", "/exit-",
+            "/affiliate?", "/aff/", "/aff-",
+            "/to.php?", "/to/",
+            "/goto?", "/goto/",
+            "/banner?", "/banner/",
+            "/ad/", "/ads/", "/adserver/",
+            "/adservice", "/adserv",
+            "/impression", "/imp",
+            "/campaign/",
+            "/clickthrough", "/click-thru",
+            "/redirector", "/redir",
+            "/rdr?", "/rdr/",
+            "/tracker?", "/tracker/",
+            "/conversion", "/convert",
+            "/count?", "/count/",
+            "/bounce?", "/bounce/",
+            "/view?", "/view/",
+            "/serve?", "/serve/",
+            "window.open", "window.location",
+            "/tag/js", "/gtag/",
+            "/pagead/", "/pagead2/"
+        )
+    }
 
     fun start() {
         if (running) return
@@ -38,6 +74,25 @@ class ProxyServer(
         try { serverSocket?.close() } catch (_: Exception) {}
     }
 
+    private fun matchesBlocklist(host: String): Boolean {
+        val lower = host.lowercase().removePrefix("www.")
+        val exactMatch = blocklist.any { blocked ->
+            val clean = blocked.lowercase().removePrefix("www.")
+            lower == clean || lower.endsWith(".$clean")
+        }
+        if (exactMatch) return true
+        return BlocklistDatabase.AGGRESSIVE_KEYWORDS.any { kw ->
+            lower.contains(kw.lowercase())
+        }
+    }
+
+    private fun matchesUrlPath(target: String): Boolean {
+        val lower = target.lowercase()
+        return BLOCKED_URL_PATTERNS.any { pattern ->
+            lower.contains(pattern)
+        }
+    }
+
     private fun handleClient(client: Socket) {
         try {
             client.soTimeout = 30000
@@ -57,12 +112,7 @@ class ProxyServer(
                 host = hostPort[0]
                 port = hostPort.getOrElse(1) { "443" }.toIntOrNull() ?: 443
 
-                val lowerHost = host.lowercase().removePrefix("www.")
-                val isAd = blocklist.any { ad ->
-                    lowerHost == ad || lowerHost.endsWith(".$ad")
-                }
-
-                if (isAd) {
+                if (matchesBlocklist(host) || matchesUrlPath(target)) {
                     client.getOutputStream().write("HTTP/1.1 403 Forbidden\r\n\r\n".toByteArray())
                     blockedCount++
                     return
@@ -70,6 +120,7 @@ class ProxyServer(
 
                 val remote = Socket()
                 try {
+                    protectSocket?.invoke(remote)
                     remote.connect(java.net.InetSocketAddress(host, port), 10000)
                     client.getOutputStream().write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray())
                     relayData(client, remote)
@@ -80,10 +131,9 @@ class ProxyServer(
                 }
             } else {
                 val url = URL(target)
-                val h = url.host.lowercase().removePrefix("www.")
-                val isAd = blocklist.any { ad -> h == ad || h.endsWith(".$ad") }
+                host = url.host
 
-                if (isAd) {
+                if (matchesBlocklist(host) || matchesUrlPath(target)) {
                     client.getOutputStream().write("HTTP/1.1 403 Forbidden\r\n\r\n".toByteArray())
                     blockedCount++
                     return
@@ -91,6 +141,7 @@ class ProxyServer(
 
                 val remote = Socket()
                 try {
+                    protectSocket?.invoke(remote)
                     val remotePort = url.port.takeIf { it != -1 } ?: 80
                     remote.connect(java.net.InetSocketAddress(url.host, remotePort), 10000)
                     val remoteOut = remote.getOutputStream()
