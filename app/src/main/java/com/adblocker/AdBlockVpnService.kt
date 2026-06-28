@@ -127,16 +127,6 @@ class AdBlockVpnService : VpnService() {
         return DNS_PRESETS[preset] ?: DEFAULT_DNS
     }
 
-    private fun getMergedBlocklist(): Set<String> {
-        val merged = mutableSetOf<String>()
-        merged.addAll(BlocklistDatabase.AD_DOMAINS)
-        merged.addAll(BlocklistDatabase.DOH_DOMAINS)
-        if (blockAdult) merged.addAll(adultBlockList)
-        merged.addAll(customBlockList)
-        merged.addAll(importedHosts)
-        return merged
-    }
-
     private fun restartVpn() {
         stopVpnInternal()
         startVpn()
