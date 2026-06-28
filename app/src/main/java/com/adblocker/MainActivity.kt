@@ -19,22 +19,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statsSummary: TextView
     private lateinit var toggleSwitch: SwitchMaterial
     private lateinit var startStopButton: Button
-
-    private lateinit var tabStats: Button
-    private lateinit var tabBlocklist: Button
-    private lateinit var panelStats: LinearLayout
-    private lateinit var panelBlocklist: LinearLayout
-
-    private lateinit var statTotalBlocked: TextView
-    private lateinit var statToday: TextView
-    private lateinit var statWeek: TextView
-    private lateinit var statBreakdown: TextView
-    private lateinit var statTopSites: TextView
-    private lateinit var btnExportCsv: Button
+    private lateinit var panelSettings: ScrollView
 
     private lateinit var inputCustomDomain: EditText
     private lateinit var btnAddDomain: Button
     private lateinit var customDomainList: TextView
+
+    private lateinit var settingsWhitelistInput: EditText
+    private lateinit var settingsBtnAddWhitelist: Button
+    private lateinit var settingsWhitelistList: TextView
+    private lateinit var settingsBtnDns: Button
+    private lateinit var settingsBtnPerApp: Button
+    private lateinit var settingsBtnImportHosts: Button
+    private lateinit var settingsBtnUpdateBlocklists: Button
+    private lateinit var settingsBtnClearStats: Button
 
     private var isRunning = false
 
@@ -50,11 +48,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        BlocklistDatabase.init(this)
+
         initViews()
         setupListeners()
-        refreshStats()
         loadCustomDomains()
-        updateTabSelection(0)
+        loadWhitelist()
+        panelSettings.visibility = android.view.View.VISIBLE
     }
 
     override fun onResume() {
@@ -69,27 +69,23 @@ class MainActivity : AppCompatActivity() {
         toggleSwitch = findViewById(R.id.toggleSwitch)
         startStopButton = findViewById(R.id.startStopButton)
 
-        tabStats = findViewById(R.id.tabStats)
-        tabBlocklist = findViewById(R.id.tabBlocklist)
-        panelStats = findViewById(R.id.panelStats)
-        panelBlocklist = findViewById(R.id.panelBlocklist)
-
-        statTotalBlocked = findViewById(R.id.statTotalBlocked)
-        statToday = findViewById(R.id.statToday)
-        statWeek = findViewById(R.id.statWeek)
-        statBreakdown = findViewById(R.id.statBreakdown)
-        statTopSites = findViewById(R.id.statTopSites)
-        btnExportCsv = findViewById(R.id.btnExportCsv)
+        panelSettings = findViewById(R.id.panelSettings)
 
         inputCustomDomain = findViewById(R.id.inputCustomDomain)
         btnAddDomain = findViewById(R.id.btnAddDomain)
         customDomainList = findViewById(R.id.customDomainList)
+
+        settingsWhitelistInput = findViewById(R.id.settingsWhitelistInput)
+        settingsBtnAddWhitelist = findViewById(R.id.settingsBtnAddWhitelist)
+        settingsWhitelistList = findViewById(R.id.settingsWhitelistList)
+        settingsBtnDns = findViewById(R.id.settingsBtnDns)
+        settingsBtnPerApp = findViewById(R.id.settingsBtnPerApp)
+        settingsBtnImportHosts = findViewById(R.id.settingsBtnImportHosts)
+        settingsBtnUpdateBlocklists = findViewById(R.id.settingsBtnUpdateBlocklists)
+        settingsBtnClearStats = findViewById(R.id.settingsBtnClearStats)
     }
 
     private fun setupListeners() {
-        tabStats.setOnClickListener { updateTabSelection(0) }
-        tabBlocklist.setOnClickListener { updateTabSelection(1) }
-
         val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
         toggleSwitch.isChecked = prefs.getBoolean("adult_blocking", true)
         toggleSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -107,25 +103,25 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnAddDomain.setOnClickListener { addCustomDomain() }
-        btnExportCsv.setOnClickListener { exportCsv() }
-
         customDomainList.setOnLongClickListener {
-            if (customDomainList.text.isNotEmpty() && customDomainList.text != "No custom domains added yet") {
+            if (customDomainList.text.isNotEmpty() && customDomainList.text != "No custom domains added yet\n\nType a domain and tap +") {
                 showRemoveDomainDialog()
             }
             true
         }
-    }
 
-    private fun updateTabSelection(index: Int) {
-        val tabs = listOf(tabStats, tabBlocklist)
-        val panels = listOf(panelStats, panelBlocklist)
-        for (i in tabs.indices) {
-            tabs[i].setTextColor(if (i == index) ContextCompat.getColor(this, R.color.button_green) else ContextCompat.getColor(this, android.R.color.darker_gray))
-            panels[i].visibility = if (i == index) android.view.View.VISIBLE else android.view.View.GONE
+        settingsBtnAddWhitelist.setOnClickListener { addWhitelistDomain() }
+        settingsWhitelistList.setOnLongClickListener {
+            showRemoveWhitelistDialog()
+            true
         }
-        if (index == 1) loadCustomDomains()
-        if (index == 0) refreshStats()
+        settingsBtnDns.setOnClickListener { showDnsPicker() }
+        settingsBtnPerApp.setOnClickListener {
+            startActivity(Intent(this, PerAppFilterActivity::class.java))
+        }
+        settingsBtnImportHosts.setOnClickListener { showHostsImportDialog() }
+        settingsBtnUpdateBlocklists.setOnClickListener { updateBlocklists() }
+        settingsBtnClearStats.setOnClickListener { clearStats() }
     }
 
     private fun startVpn() {
@@ -283,10 +279,218 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (_: Exception) {}
         if (domains.isEmpty()) {
-            customDomainList.text = "No custom domains added yet\n\nTap + to add a domain\nLong-press this area to remove"
+            customDomainList.text = "No custom domains added yet\n\nType a domain and tap +"
         } else {
-            customDomainList.text = domains.joinToString("\n") { "• $it" }
+            customDomainList.text = domains.joinToString("\n") { "\u2022 $it" }
         }
+    }
+
+    private fun addWhitelistDomain() {
+        var domain = settingsWhitelistInput.text.toString().trim().lowercase()
+        if (domain.isEmpty()) {
+            Toast.makeText(this, "Enter a domain to allow", Toast.LENGTH_SHORT).show()
+            return
+        }
+        domain = domain.removePrefix("http://").removePrefix("https://").removePrefix("www.")
+        domain = domain.split("/").first().trim()
+        if (domain.isEmpty() || !domain.contains(".")) {
+            Toast.makeText(this, "Invalid domain", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+        val whitelist = BlocklistDatabase.loadWhitelist(prefs).toMutableSet()
+        if (whitelist.contains(domain)) {
+            Toast.makeText(this, "Domain already in whitelist", Toast.LENGTH_SHORT).show()
+            return
+        }
+        whitelist.add(domain)
+        BlocklistDatabase.saveWhitelist(prefs, whitelist)
+        settingsWhitelistInput.text.clear()
+        loadWhitelist()
+        if (isRunning) {
+            Intent(this, AdBlockVpnService::class.java).apply {
+                action = AdBlockVpnService.ACTION_UPDATE_SETTINGS
+                startService(this)
+            }
+        }
+        Toast.makeText(this, "Added $domain to whitelist", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showRemoveWhitelistDialog() {
+        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+        val whitelist = BlocklistDatabase.loadWhitelist(prefs).toMutableList()
+        if (whitelist.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("Remove from whitelist")
+            .setItems(whitelist.toTypedArray()) { _, which ->
+                whitelist.removeAt(which)
+                BlocklistDatabase.saveWhitelist(prefs, whitelist.toSet())
+                loadWhitelist()
+                if (isRunning) {
+                    Intent(this, AdBlockVpnService::class.java).apply {
+                        action = AdBlockVpnService.ACTION_UPDATE_SETTINGS
+                        startService(this)
+                    }
+                }
+                Toast.makeText(this, "Removed from whitelist", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            .show()
+    }
+
+    private fun loadWhitelist() {
+        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+        val whitelist = BlocklistDatabase.loadWhitelist(prefs)
+        if (whitelist.isEmpty()) {
+            settingsWhitelistList.text = "No whitelisted domains\n\nAdd domains that should bypass blocking"
+        } else {
+            settingsWhitelistList.text = whitelist.joinToString("\n") { "\u2022 $it" }
+        }
+    }
+
+    private fun showDnsPicker() {
+        val presets = listOf("All", "Google", "Cloudflare", "OpenDNS", "Quad9", "Custom")
+        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+        val current = prefs.getString("dns_preset", "All") ?: "All"
+
+        AlertDialog.Builder(this)
+            .setTitle("DNS Server")
+            .setSingleChoiceItems(presets.toTypedArray(), presets.indexOf(current).coerceAtLeast(0)) { _, which ->
+                val selected = presets[which]
+                prefs.edit().putString("dns_preset", selected).apply()
+                if (selected == "Custom") {
+                    showCustomDnsDialog()
+                } else {
+                    if (isRunning) {
+                        Intent(this, AdBlockVpnService::class.java).apply {
+                            action = AdBlockVpnService.ACTION_UPDATE_SETTINGS
+                            startService(this)
+                        }
+                    }
+                    Toast.makeText(this, "DNS: $selected", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            .show()
+    }
+
+    private fun showCustomDnsDialog() {
+        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+        val current = prefs.getString("dns_custom", "8.8.8.8,8.8.4.4") ?: "8.8.8.8,8.8.4.4"
+        val input = EditText(this).apply {
+            setText(current)
+            hint = "e.g. 8.8.8.8,8.8.4.4"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Custom DNS")
+            .setMessage("Enter comma-separated DNS IPs")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val value = input.text.toString().trim()
+                if (value.isNotEmpty()) {
+                    prefs.edit().putString("dns_custom", value).apply()
+                    if (isRunning) {
+                        Intent(this, AdBlockVpnService::class.java).apply {
+                            action = AdBlockVpnService.ACTION_UPDATE_SETTINGS
+                            startService(this)
+                        }
+                    }
+                    Toast.makeText(this, "Custom DNS saved", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            .show()
+    }
+
+    private fun showHostsImportDialog() {
+        val input = EditText(this).apply {
+            hint = "Paste hosts file content here"
+            gravity = android.view.Gravity.TOP
+            minLines = 8
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Import Hosts File")
+            .setMessage("Paste contents of a hosts file or plain domain list")
+            .setView(input)
+            .setPositiveButton("Import") { _, _ ->
+                val content = input.text.toString().trim()
+                if (content.isEmpty()) {
+                    Toast.makeText(this, "No content to import", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val count = BlocklistUpdater.importHostsFile(this@MainActivity, content).size
+                if (count > 0) {
+                    Toast.makeText(this, "Imported $count domains", Toast.LENGTH_SHORT).show()
+                    if (isRunning) {
+                        Intent(this, AdBlockVpnService::class.java).apply {
+                            action = AdBlockVpnService.ACTION_UPDATE_SETTINGS
+                            startService(this)
+                        }
+                    }
+                } else {
+                    Toast.makeText(this, "No valid domains found", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            .show()
+    }
+
+    private fun updateBlocklists() {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Updating Blocklists")
+            .setMessage("Downloading...")
+            .setCancelable(true)
+            .setNegativeButton("Cancel") { _, _ -> }
+            .create()
+            .apply { show() }
+
+        BlocklistUpdater.updateAll(this,
+            onProgress = { msg ->
+                runOnUiThread {
+                    try { dialog.setMessage(msg) } catch (_: Exception) {}
+                }
+            },
+            onDone = { success, result ->
+                runOnUiThread {
+                    if (dialog.isShowing) {
+                        try { dialog.dismiss() } catch (_: Exception) {}
+                    }
+                    if (!isFinishing) {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle(if (success) "Update Complete" else "Update Issues")
+                            .setMessage(result)
+                            .setPositiveButton("OK", null)
+                            .create()
+                            .show()
+                    }
+                }
+            }
+        )
+    }
+
+    private fun clearStats() {
+        AlertDialog.Builder(this)
+            .setTitle("Clear Statistics")
+            .setMessage("Reset all blocking statistics?")
+            .setPositiveButton("Clear") { _, _ ->
+                val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
+                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                prefs.edit()
+                    .remove("stat_total_blocked")
+                    .remove("stat_today_$today")
+                    .remove("stat_week_domains")
+                    .remove("stat_top_sites")
+                    .apply()
+                refreshStats()
+                Toast.makeText(this, "Statistics cleared", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            .show()
     }
 
     private fun refreshStats() {
@@ -294,101 +498,10 @@ class MainActivity : AppCompatActivity() {
         val total = prefs.getInt("stat_total_blocked", 0)
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
         val todayCount = prefs.getInt("stat_today_$today", 0)
-        val weekDomains = prefs.getStringSet("stat_week_domains", mutableSetOf())?.size ?: 0
-
-        statTotalBlocked.text = total.toString()
-        statToday.text = todayCount.toString()
-        statWeek.text = weekDomains.toString()
-        statBreakdown.text = "Domain: $total  |  Keyword: 0  |  Custom: ${getCustomDomainCount()}"
-
-        val topSites = prefs.getString("stat_top_sites", "{}") ?: "{}"
-        val sites = mutableListOf<Pair<String, Int>>()
-        try {
-            val entries = topSites.removeSurrounding("{", "}")
-                .split(",")
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-            for (entry in entries) {
-                val parts = entry.split(":")
-                if (parts.size == 2) {
-                    val name = parts[0].trim().removeSurrounding("\"")
-                    val count = parts[1].trim().toIntOrNull() ?: 0
-                    sites.add(name to count)
-                }
-            }
-        } catch (_: Exception) {}
-        sites.sortByDescending { it.second }
-
-        if (sites.isEmpty()) {
-            statTopSites.text = "No blocked sites yet"
-        } else {
-            statTopSites.text = sites.take(10).mapIndexed { i, (name, count) ->
-                "${i + 1}. $name ($count)"
-            }.joinToString("\n")
-        }
-
         if (total > 0) {
-            statsSummary.text = "$total blocked • $todayCount today"
+            statsSummary.text = "$total blocked \u2022 $todayCount today"
         } else {
             statsSummary.text = ""
-        }
-    }
-
-    private fun getCustomDomainCount(): Int {
-        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
-        val json = prefs.getString("custom_blocklist", "[]") ?: "[]"
-        return try {
-            val trimmed = json.trim()
-            if (trimmed.startsWith("[")) {
-                trimmed.removeSurrounding("[", "]")
-                    .split(",")
-                    .count { it.trim().isNotBlank() }
-            } else 0
-        } catch (_: Exception) { 0 }
-    }
-
-    private fun exportCsv() {
-        val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
-        val total = prefs.getInt("stat_total_blocked", 0)
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-        val todayCount = prefs.getInt("stat_today_$today", 0)
-        val topSites = prefs.getString("stat_top_sites", "{}") ?: "{}"
-
-        val csv = buildString {
-            appendLine("Blocker+ Adult Monitoring Report")
-            appendLine("Exported: $today")
-            appendLine()
-            appendLine("Total Blocked,$total")
-            appendLine("Today,$todayCount")
-            appendLine()
-            appendLine("Domain,Count")
-            try {
-                val entries = topSites.removeSurrounding("{", "}")
-                    .split(",")
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                for (entry in entries) {
-                    val parts = entry.split(":")
-                    if (parts.size == 2) {
-                        appendLine("${parts[0].trim().removeSurrounding("\"")},${parts[1].trim()}")
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-
-        try {
-            val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-            val file = java.io.File(dir, "blockerplus_stats_$today.csv")
-            file.writeText(csv)
-            Toast.makeText(this, "Exported to Downloads/${file.name}", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            try {
-                val file = java.io.File(cacheDir, "blockerplus_stats_$today.csv")
-                file.writeText(csv)
-                Toast.makeText(this, "Exported to cache/${file.name}", Toast.LENGTH_LONG).show()
-            } catch (e2: Exception) {
-                Toast.makeText(this, "Export failed: ${e2.message}", Toast.LENGTH_SHORT).show()
-            }
         }
     }
 }

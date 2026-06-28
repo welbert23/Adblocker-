@@ -2,6 +2,11 @@ package com.adblocker
 
 import java.nio.ByteBuffer
 
+data class BlockResult(
+    val blocked: Boolean,
+    val reason: String = ""
+)
+
 class DnsPacket(private val buffer: ByteBuffer) {
     private val transactionId: Int = buffer.getShort(0).toInt() and 0xFFFF
     val questions: MutableList<String> = mutableListOf()
@@ -114,56 +119,65 @@ class DnsPacket(private val buffer: ByteBuffer) {
         gamblingKeywords: Set<String>,
         customBlockList: Set<String>,
         safeList: Set<String>,
-        blockAdult: Boolean
-    ): Boolean {
-        return questions.any { q ->
+        blockAdult: Boolean,
+        whitelist: Set<String> = emptySet()
+    ): BlockResult {
+        return questions.firstNotNullOfOrNull { q ->
             val lower = q.lowercase().removePrefix("www.")
-
-            val isDoh = BlocklistDatabase.DOH_DOMAINS.any { doh ->
-                val cleanDoh = doh.lowercase().removePrefix("www.")
-                lower == cleanDoh || lower.endsWith(".$cleanDoh")
-            }
-            if (isDoh) return@any true
 
             val isSafe = safeList.any { safe ->
                 val cleanSafe = safe.lowercase().removePrefix("www.")
                 lower == cleanSafe || lower.endsWith(".$cleanSafe")
             }
-            if (isSafe) return@any false
+            if (isSafe) return@firstNotNullOfOrNull null
+
+            val isWhitelisted = whitelist.any { w ->
+                lower == w || lower.endsWith(".$w")
+            }
+            if (isWhitelisted) return@firstNotNullOfOrNull null
+
+            val isDoh = BlocklistDatabase.DOH_DOMAINS.any { doh ->
+                val cleanDoh = doh.lowercase().removePrefix("www.")
+                lower == cleanDoh || lower.endsWith(".$cleanDoh")
+            }
+            if (isDoh) return@firstNotNullOfOrNull BlockResult(true, "DoH")
 
             val inCustom = customBlockList.any { custom ->
                 val cleanCustom = custom.lowercase().removePrefix("www.")
                 lower == cleanCustom || lower.endsWith(".$cleanCustom")
             }
-            if (inCustom) return@any true
-
-            val hasGamblingKeyword = gamblingKeywords.any { kw ->
-                lower.contains(kw.lowercase())
-            }
-            if (hasGamblingKeyword) return@any true
+            if (inCustom) return@firstNotNullOfOrNull BlockResult(true, "Custom")
 
             val hasAggressiveKeyword = BlocklistDatabase.AGGRESSIVE_KEYWORDS.any { kw ->
                 lower.contains(kw.lowercase())
             }
-            if (hasAggressiveKeyword) return@any true
+            if (hasAggressiveKeyword) return@firstNotNullOfOrNull BlockResult(true, "Aggressive keyword")
+
+            val hasGamblingKeyword = gamblingKeywords.any { kw ->
+                lower.contains(kw.lowercase())
+            }
+            if (hasGamblingKeyword) return@firstNotNullOfOrNull BlockResult(true, "Gambling")
 
             if (blockAdult) {
                 val isAdult = adultBlockList.any { adult ->
                     val cleanAdult = adult.lowercase().removePrefix("www.")
                     lower == cleanAdult || lower.endsWith(".$cleanAdult")
                 }
-                if (isAdult) return@any true
+                if (isAdult) return@firstNotNullOfOrNull BlockResult(true, "Adult")
 
                 val hasAdultKeyword = adultKeywords.any { kw ->
                     lower.contains(kw.lowercase())
                 }
-                if (hasAdultKeyword) return@any true
+                if (hasAdultKeyword) return@firstNotNullOfOrNull BlockResult(true, "Adult keyword")
             }
 
-            adBlockList.any { ad ->
+            val inAd = adBlockList.any { ad ->
                 val cleanAd = ad.lowercase().removePrefix("www.")
                 lower == cleanAd || lower.endsWith(".$cleanAd")
             }
-        }
+            if (inAd) return@firstNotNullOfOrNull BlockResult(true, "Ad")
+
+            null
+        } ?: BlockResult(false)
     }
 }

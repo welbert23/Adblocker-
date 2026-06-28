@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1a1a2e"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Per-App Filtering"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#ffffff"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Select apps to block ads (checked = blocked, unchecked = bypass)"
+        android:textSize="11sp"
+        android:textColor="#8888aa"
+        android:layout_marginBottom="12dp" />
+
+    <EditText
+        android:id="@+id/searchInput"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:hint="Search apps..."
+        android:textSize="13sp"
+        android:textColor="#ffffff"
+        android:textColorHint="#666688"
+        android:background="#222244"
+        android:padding="10dp"
+        android:inputType="text"
+        android:layout_marginBottom="8dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/appListContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnSavePerApp"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:text="Save &amp; Restart VPN"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#ffffff"
+        android:backgroundTint="#00e676"
+        android:layout_marginTop="12dp" />
+
+</LinearLayout>

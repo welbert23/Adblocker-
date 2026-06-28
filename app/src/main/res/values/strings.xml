@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Blocker+</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_log">Log</string>
+    <string name="tab_settings">Settings</string>
+    <string name="settings_dns">DNS Server</string>
+    <string name="settings_whitelist">Whitelist</string>
+    <string name="settings_per_app">Per-App Filtering</string>
+    <string name="settings_import">Import Hosts</string>
+    <string name="settings_update">Update Blocklists</string>
+    <string name="settings_adult">Block Adult Content</string>
+    <string name="log_empty">No blocked domains yet</string>
+    <string name="dns_google">Google DNS</string>
+    <string name="dns_cloudflare">Cloudflare</string>
+    <string name="dns_opendns">OpenDNS</string>
+    <string name="dns_quad9">Quad9</string>
+    <string name="dns_custom">Custom</string>
+    <string name="whitelist_hint">Enter domain to allow</string>
+    <string name="per_app_title">Choose apps to block</string>
 </resources>

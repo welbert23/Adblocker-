@@ -93,196 +93,75 @@
         android:layout_height="1dp"
         android:background="#333355" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:background="#16162a">
-
-        <Button
-            android:id="@+id/tabStats"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:text="Stats"
-            android:textSize="13sp"
-            android:textColor="#8888aa"
-            android:backgroundTint="#00000000"
-            android:gravity="center" />
-
-        <Button
-            android:id="@+id/tabBlocklist"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:text="Blocklist"
-            android:textSize="13sp"
-            android:textColor="#8888aa"
-            android:backgroundTint="#00000000"
-            android:gravity="center" />
-
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#333355" />
-
-    <FrameLayout
-        android:id="@+id/tabContent"
+    <ScrollView
+        android:id="@+id/panelSettings"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="16dp">
+        android:padding="16dp"
+        android:visibility="visible">
 
         <LinearLayout
-            android:id="@+id/panelStats"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:visibility="visible">
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Blocking Statistics"
+                android:text="Whitelist"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="#ffffff"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Domains that should bypass blocking"
+                android:textSize="11sp"
+                android:textColor="#8888aa"
+                android:layout_marginBottom="8dp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="44dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="12dp">
+                android:layout_marginBottom="8dp">
 
-                <LinearLayout
+                <EditText android:id="@+id/settingsWhitelistInput"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="12dp"
+                    android:hint="Enter domain to allow"
+                    android:textSize="13sp"
+                    android:textColor="#ffffff"
+                    android:textColorHint="#666688"
                     android:background="#222244"
-                    android:layout_marginEnd="6dp">
-
-                    <TextView android:id="@+id/statTotalBlocked"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0"
-                        android:textSize="28sp"
-                        android:textStyle="bold"
-                        android:textColor="#00e676" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Total Blocked"
-                        android:textSize="11sp"
-                        android:textColor="#8888aa" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
                     android:padding="12dp"
-                    android:background="#222244"
-                    android:layout_marginEnd="6dp">
+                    android:inputType="textUri"
+                    android:layout_marginEnd="8dp" />
 
-                    <TextView android:id="@+id/statToday"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0"
-                        android:textSize="28sp"
-                        android:textStyle="bold"
-                        android:textColor="#ffeb3b" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Today"
-                        android:textSize="11sp"
-                        android:textColor="#8888aa" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="12dp"
-                    android:background="#222244">
-
-                    <TextView android:id="@+id/statWeek"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0"
-                        android:textSize="28sp"
-                        android:textStyle="bold"
-                        android:textColor="#448aff" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="This Week"
-                        android:textSize="11sp"
-                        android:textColor="#8888aa" />
-                </LinearLayout>
+                <Button android:id="@+id/settingsBtnAddWhitelist"
+                    android:layout_width="56dp"
+                    android:layout_height="match_parent"
+                    android:text="+"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="#ffffff"
+                    android:backgroundTint="#448aff" />
             </LinearLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
+            <TextView android:id="@+id/settingsWhitelistList"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Block Type Breakdown"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#ffffff"
-                android:layout_marginBottom="4dp" />
-
-            <TextView android:id="@+id/statBreakdown"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Domain: 0  |  Keyword: 0  |  Custom: 0"
+                android:minHeight="60dp"
+                android:text="No whitelisted domains"
                 android:textSize="12sp"
                 android:textColor="#8888aa"
-                android:layout_marginBottom="12dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Top Blocked Sites"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#ffffff"
-                android:layout_marginBottom="4dp" />
-
-            <TextView android:id="@+id/statTopSites"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:text="No blocked sites yet"
-                android:textSize="12sp"
-                android:textColor="#8888aa" />
-
-            <Button android:id="@+id/btnExportCsv"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:text="Export CSV"
-                android:textSize="13sp"
-                android:textColor="#ffffff"
-                android:backgroundTint="#333366"
-                android:layout_marginTop="8dp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/panelBlocklist"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:visibility="gone">
+                android:background="#222244"
+                android:padding="8dp"
+                android:layout_marginBottom="16dp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -291,17 +170,26 @@
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="#ffffff"
+                android:layout_marginBottom="4dp"
+                android:layout_marginTop="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Additional domains to block"
+                android:textSize="11sp"
+                android:textColor="#8888aa"
                 android:layout_marginBottom="8dp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="44dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="12dp">
+                android:layout_marginBottom="8dp">
 
                 <EditText android:id="@+id/inputCustomDomain"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="match_parent"
                     android:layout_weight="1"
                     android:hint="Enter domain (e.g. example.com)"
                     android:textSize="13sp"
@@ -314,7 +202,7 @@
 
                 <Button android:id="@+id/btnAddDomain"
                     android:layout_width="56dp"
-                    android:layout_height="44dp"
+                    android:layout_height="match_parent"
                     android:text="+"
                     android:textSize="20sp"
                     android:textStyle="bold"
@@ -322,28 +210,79 @@
                     android:backgroundTint="#00e676" />
             </LinearLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Your custom blocked domains:"
-                android:textSize="13sp"
-                android:textColor="#aaaacc"
-                android:layout_marginBottom="4dp" />
-
             <TextView android:id="@+id/customDomainList"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:minHeight="60dp"
                 android:text="No custom domains added yet"
                 android:textSize="12sp"
                 android:textColor="#8888aa"
                 android:background="#222244"
-                android:padding="12dp"
-                android:scrollbars="vertical" />
+                android:padding="8dp"
+                android:layout_marginBottom="12dp"
+                android:longClickable="true" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#333355"
+                android:layout_marginBottom="12dp" />
+
+            <Button android:id="@+id/settingsBtnDns"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="DNS Server"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#333366"
+                android:gravity="center|start"
+                android:paddingStart="16dp"
+                android:layout_marginBottom="4dp" />
+
+            <Button android:id="@+id/settingsBtnPerApp"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Per-App Filtering"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#333366"
+                android:gravity="center|start"
+                android:paddingStart="16dp"
+                android:layout_marginBottom="4dp" />
+
+            <Button android:id="@+id/settingsBtnImportHosts"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Import Hosts File"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#333366"
+                android:gravity="center|start"
+                android:paddingStart="16dp"
+                android:layout_marginBottom="4dp" />
+
+            <Button android:id="@+id/settingsBtnUpdateBlocklists"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Update Blocklists"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#333366"
+                android:gravity="center|start"
+                android:paddingStart="16dp"
+                android:layout_marginBottom="4dp" />
+
+            <Button android:id="@+id/settingsBtnClearStats"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Clear Statistics"
+                android:textSize="14sp"
+                android:textColor="#ff6666"
+                android:backgroundTint="#442222"
+                android:gravity="center|start"
+                android:paddingStart="16dp"
+                android:layout_marginTop="8dp" />
         </LinearLayout>
-
-
-
-    </FrameLayout>
+    </ScrollView>
 
 </LinearLayout>
