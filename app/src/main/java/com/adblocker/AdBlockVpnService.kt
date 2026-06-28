@@ -15,15 +15,8 @@ import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
-
-data class LogEntry(
-    val domain: String,
-    val reason: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
 
 class AdBlockVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
@@ -31,13 +24,14 @@ class AdBlockVpnService : VpnService() {
     @Volatile private var blockAdult = true
     private val blockedCount = AtomicLong(0)
     @Volatile private var lastBlockedDomain: String? = null
-    private var proxyServer: ProxyServer? = null
 
     private var customBlockList: Set<String> = emptySet()
     private var whitelist: Set<String> = emptySet()
+    private var importedHosts: Set<String> = emptySet()
     private var blockedApps: Set<String> = emptySet()
     private var adultBlockList: Set<String> = BlocklistDatabase.ADULT_DOMAINS
     private var adultKeywords: Set<String> = BlocklistDatabase.ADULT_KEYWORDS
+    private var gamblingDomains: Set<String> = BlocklistDatabase.GAMBLING_DOMAINS
     private var gamblingKeywords: Set<String> = BlocklistDatabase.GAMBLING_KEYWORDS
     private var dnsServers: List<String> = DEFAULT_DNS
 
@@ -51,10 +45,6 @@ class AdBlockVpnService : VpnService() {
         const val ACTION_UPDATE_SETTINGS = "com.adblocker.UPDATE_SETTINGS"
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "adblocker_vpn"
-        const val PROXY_PORT = 9898
-        const val MAX_LOG_ENTRIES = 1000
-
-        val blockLog: ConcurrentLinkedQueue<LogEntry> = ConcurrentLinkedQueue()
 
         val DEFAULT_DNS = listOf(
             "8.8.8.8", "8.8.4.4",
@@ -70,10 +60,6 @@ class AdBlockVpnService : VpnService() {
             "Quad9" to listOf("9.9.9.9", "149.112.112.112"),
             "Custom" to emptyList()
         )
-
-        fun getLogSnapshot(): List<LogEntry> {
-            return blockLog.toList().reversed()
-        }
     }
 
     override fun onCreate() {
@@ -110,9 +96,11 @@ class AdBlockVpnService : VpnService() {
         whitelist = BlocklistDatabase.loadWhitelist(prefs)
         blockAdult = prefs.getBoolean("adult_blocking", true)
         customBlockList = loadCustomBlocklist(prefs)
+        importedHosts = BlocklistDatabase.IMPORTED_HOSTS
         blockedApps = BlocklistDatabase.loadBlockedApps(prefs)
         adultBlockList = BlocklistDatabase.ADULT_DOMAINS
         adultKeywords = BlocklistDatabase.ADULT_KEYWORDS
+        gamblingDomains = BlocklistDatabase.GAMBLING_DOMAINS
         gamblingKeywords = BlocklistDatabase.GAMBLING_KEYWORDS
         dnsServers = loadDnsServers(prefs)
         if (running) restartVpn()
@@ -145,6 +133,7 @@ class AdBlockVpnService : VpnService() {
         merged.addAll(BlocklistDatabase.DOH_DOMAINS)
         if (blockAdult) merged.addAll(adultBlockList)
         merged.addAll(customBlockList)
+        merged.addAll(importedHosts)
         return merged
     }
 
@@ -165,16 +154,11 @@ class AdBlockVpnService : VpnService() {
         udpForwarders.clear()
         vpnInterface?.close()
         vpnInterface = null
-        proxyServer?.stop()
-        proxyServer = null
     }
 
     private fun startVpn() {
         try {
             loadSettings()
-
-            proxyServer?.stop()
-            proxyServer = ProxyServer(getMergedBlocklist(), PROXY_PORT).also { it.start() }
 
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -260,7 +244,6 @@ class AdBlockVpnService : VpnService() {
         udpForwarders.clear()
         vpnInterface?.close(); vpnInterface = null
         tunOutput = null
-        proxyServer?.stop(); proxyServer = null
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }
 
@@ -506,7 +489,6 @@ class AdBlockVpnService : VpnService() {
                         state.blocked = true
                         blockedCount.incrementAndGet()
                         lastBlockedDomain = lower
-                        addLogEntry(lower, blockResult.reason)
                         saveBlockStats(lower)
                         updateNotification()
                         val rst = IpUtil.createTcpRst(dstIp, srcIp, dstPort, srcPort,
@@ -549,10 +531,18 @@ class AdBlockVpnService : VpnService() {
                 val clean = custom.lowercase().removePrefix("www.")
                 lower == clean || lower.endsWith(".$clean")
             }) return SimpleBlockResult(true, "Custom")
+        if (importedHosts.any { h ->
+                val clean = h.lowercase().removePrefix("www.")
+                lower == clean || lower.endsWith(".$clean")
+            }) return SimpleBlockResult(true, "Imported")
         if (BlocklistDatabase.AGGRESSIVE_KEYWORDS.any { lower.contains(it.lowercase()) })
             return SimpleBlockResult(true, "Keyword")
+        if (gamblingDomains.any { gd ->
+                val clean = gd.lowercase().removePrefix("www.")
+                lower == clean || lower.endsWith(".$clean")
+            }) return SimpleBlockResult(true, "Gambling")
         if (gamblingKeywords.any { lower.contains(it.lowercase()) })
-            return SimpleBlockResult(true, "Gambling")
+            return SimpleBlockResult(true, "Gambling keyword")
         if (blockAdult) {
             if (adultBlockList.any { adult ->
                     val clean = adult.lowercase().removePrefix("www.")
@@ -677,8 +667,10 @@ class AdBlockVpnService : VpnService() {
                 BlocklistDatabase.AD_DOMAINS,
                 adultBlockList,
                 adultKeywords,
+                gamblingDomains,
                 gamblingKeywords,
                 customBlockList,
+                importedHosts,
                 BlocklistDatabase.SAFE_DOMAINS,
                 blockAdult,
                 whitelist
@@ -690,7 +682,6 @@ class AdBlockVpnService : VpnService() {
                 writeDnsResponse(srcIp, srcPort, dstIp, 53, resp, isV6)
                 blockedCount.incrementAndGet()
                 lastBlockedDomain = domain
-                addLogEntry(domain, blockResult.reason)
                 updateNotification()
                 saveBlockStats(domain)
             } else if (dnsPkt.questionTypes.any { it == 64 || it == 65 }) {
@@ -749,11 +740,6 @@ class AdBlockVpnService : VpnService() {
         } catch (_: Exception) {}
     }
 
-    private fun addLogEntry(domain: String, reason: String) {
-        blockLog.add(LogEntry(domain, reason))
-        while (blockLog.size > MAX_LOG_ENTRIES) blockLog.poll()
-    }
-
     private fun saveBlockStats(domain: String?) {
         if (domain == null) return
         try {
@@ -809,6 +795,4 @@ class AdBlockVpnService : VpnService() {
             startForeground(NOTIFICATION_ID, n)
         } catch (_: Exception) {}
     }
-
-    fun getBlockedCount(): Long = blockedCount.get()
 }

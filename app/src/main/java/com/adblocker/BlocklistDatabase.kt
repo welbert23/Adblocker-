@@ -11,10 +11,12 @@ object BlocklistDatabase {
     lateinit var AD_DOMAINS: Set<String>
     lateinit var ADULT_DOMAINS: Set<String>
     lateinit var ADULT_KEYWORDS: Set<String>
+    lateinit var GAMBLING_DOMAINS: Set<String>
     lateinit var GAMBLING_KEYWORDS: Set<String>
     lateinit var DOH_DOMAINS: Set<String>
     lateinit var AGGRESSIVE_KEYWORDS: Set<String>
     lateinit var SAFE_DOMAINS: Set<String>
+    lateinit var IMPORTED_HOSTS: Set<String>
 
     private var initialized = false
     private var appContext: Context? = null
@@ -27,12 +29,15 @@ object BlocklistDatabase {
         AD_DOMAINS = loadFromAssetsOrData(context, "ad_domains.txt")
         ADULT_DOMAINS = loadFromAssetsOrData(context, "adult_domains.txt")
         ADULT_KEYWORDS = loadFromAssetsOrData(context, "adult_keywords.txt")
+        GAMBLING_DOMAINS = loadFromAssetsOrData(context, "gambling_domains.txt")
         GAMBLING_KEYWORDS = loadFromAssetsOrData(context, "gambling_keywords.txt")
         DOH_DOMAINS = loadFromAssetsOrData(context, "doh_domains.txt")
         AGGRESSIVE_KEYWORDS = loadFromAssetsOrData(context, "aggressive_keywords.txt")
         SAFE_DOMAINS = loadFromAssetsOrData(context, "safe_domains.txt")
+        IMPORTED_HOSTS = if (File(context.filesDir, "imported_hosts.txt").exists())
+            loadFromDataOnly(context, "imported_hosts.txt") else emptySet()
 
-        Log.i(TAG, "Loaded: ${AD_DOMAINS.size} ads, ${ADULT_DOMAINS.size} adult, ${ADULT_KEYWORDS.size} adult-kw, ${GAMBLING_KEYWORDS.size} gambling, ${DOH_DOMAINS.size} doh, ${AGGRESSIVE_KEYWORDS.size} aggressive, ${SAFE_DOMAINS.size} safe")
+        Log.i(TAG, "Loaded: ${AD_DOMAINS.size} ads, ${ADULT_DOMAINS.size} adult, ${ADULT_KEYWORDS.size} adult-kw, ${GAMBLING_DOMAINS.size} gambling-d, ${GAMBLING_KEYWORDS.size} gambling-kw, ${DOH_DOMAINS.size} doh, ${AGGRESSIVE_KEYWORDS.size} aggressive, ${SAFE_DOMAINS.size} safe, ${IMPORTED_HOSTS.size} imported")
     }
 
     private fun loadFromAssetsOrData(context: Context, filename: String): Set<String> {
@@ -49,6 +54,19 @@ object BlocklistDatabase {
             }
         }
         return loadFromAssets(context, filename)
+    }
+
+    private fun loadFromDataOnly(context: Context, filename: String): Set<String> {
+        val dataFile = File(context.filesDir, filename)
+        return try {
+            dataFile.readLines()
+                .map { it.trim().lowercase() }
+                .filter { it.isNotBlank() && !it.startsWith("#") }
+                .toSet()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load $filename: ${e.message}")
+            emptySet()
+        }
     }
 
     private fun loadFromAssets(context: Context, filename: String): Set<String> {
@@ -101,6 +119,4 @@ object BlocklistDatabase {
         val json = packages.joinToString(",") { "\"$it\"" }
         prefs.edit().putString("blocked_apps", "[$json]").apply()
     }
-
-    fun isInitialized(): Boolean = initialized
 }

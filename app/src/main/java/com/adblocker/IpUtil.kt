@@ -5,13 +5,9 @@ import java.nio.ByteBuffer
 
 object IpUtil {
 
-    const val IPV6_HEADER_LEN = 40
-
     fun ipVersion(pkt: ByteArray): Int = (pkt[0].toInt() shr 4) and 0x0F
 
     fun ipHeaderLen(pkt: ByteArray): Int = (pkt[0].toInt() and 0x0F) * 4
-
-    fun totalLen(pkt: ByteArray): Int = ((pkt[2].toInt() and 0xFF) shl 8) or (pkt[3].toInt() and 0xFF)
 
     fun protocol(pkt: ByteArray): Int = pkt[9].toInt() and 0xFF
 
@@ -28,9 +24,6 @@ object IpUtil {
     }
 
     fun ip6Protocol(pkt: ByteArray): Int = pkt[6].toInt() and 0xFF
-
-    fun ip6PayloadLength(pkt: ByteArray): Int =
-        ((pkt[4].toInt() and 0xFF) shl 8) or (pkt[5].toInt() and 0xFF)
 
     fun ip6SrcIp(pkt: ByteArray): ByteArray {
         val ip = ByteArray(16)
@@ -51,26 +44,16 @@ object IpUtil {
         ((pkt[ihl + 2].toInt() and 0xFF) shl 8) or (pkt[ihl + 3].toInt() and 0xFF)
 
     fun tcpFlags(pkt: ByteArray, ihl: Int): Int {
-        val tcpHeaderLen = ((pkt[ihl + 12].toInt() and 0xF0) shr 2)
         val flagsOffset = ihl + 13
         return pkt[flagsOffset].toInt() and 0x3F
     }
 
     const val TCP_SYN = 0x02
-    const val TCP_SYN_ACK = 0x12
     const val TCP_ACK = 0x10
-    const val TCP_PSH_ACK = 0x18
-    const val TCP_FIN_ACK = 0x11
     const val TCP_RST = 0x04
-    const val TCP_RST_ACK = 0x14
 
     fun tcpSeq(pkt: ByteArray, ihl: Int): Long {
         val b = ByteBuffer.wrap(pkt, ihl + 4, 4)
-        return b.getInt().toLong() and 0xFFFFFFFFL
-    }
-
-    fun tcpAck(pkt: ByteArray, ihl: Int): Long {
-        val b = ByteBuffer.wrap(pkt, ihl + 8, 4)
         return b.getInt().toLong() and 0xFFFFFFFFL
     }
 
@@ -101,20 +84,13 @@ object IpUtil {
         var serverSeq = 0L
         var clientAck = 0L
         var serverAck = 0L
-        var synReceived = false
-        var synAckSent = false
         var established = false
         var closed = false
         var blocked = false
         var sniChecked = false
-        var sniDomain: String? = null
         var remoteSocket: java.net.Socket? = null
         var remoteOut: java.io.OutputStream? = null
         var remoteIn: java.io.InputStream? = null
-        var relayThread: Thread? = null
-        var pendingData: ByteArray? = null
-
-        fun key(): TcpKey = TcpKey(dstIp, dstPort, srcIp, srcPort)
 
         var srcIp: ByteArray = ByteArray(4)
         var srcPort: Int = 0

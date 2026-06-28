@@ -14,7 +14,12 @@ object BlocklistUpdater {
     private val BLOCKLIST_URLS = mapOf(
         "ad_domains.txt" to "https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt",
         "adult_domains.txt" to "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts",
-        "gambling_keywords.txt" to "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts"
+        "gambling_domains.txt" to "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts"
+    )
+
+    private val NO_REMOTE_SOURCE = setOf(
+        "adult_keywords.txt", "aggressive_keywords.txt",
+        "doh_domains.txt", "safe_domains.txt", "gambling_keywords.txt"
     )
 
     fun updateAll(context: Context, onProgress: (String) -> Unit = {}, onDone: (Boolean, String) -> Unit = { _, _ -> }) {
@@ -34,6 +39,9 @@ object BlocklistUpdater {
                         results.add("$filename: FAILED ($msg)")
                         Log.e(TAG, "Failed to download $filename: $msg")
                     }
+                }
+                for (filename in NO_REMOTE_SOURCE) {
+                    results.add("$filename: no remote source")
                 }
                 BlocklistDatabase.reload()
                 onDone(success, results.joinToString("\n"))
@@ -100,12 +108,12 @@ object BlocklistUpdater {
 
         if (domains.isEmpty()) return emptySet()
 
-        val existing = File(context.filesDir, "ad_domains.txt")
-        val allDomains = if (existing.exists()) {
-            existing.readLines().toMutableSet().apply { addAll(domains) }
+        val imported = File(context.filesDir, "imported_hosts.txt")
+        val allDomains = if (imported.exists()) {
+            imported.readLines().toMutableSet().apply { addAll(domains) }
         } else domains
 
-        existing.writeText(allDomains.joinToString("\n"))
+        imported.writeText(allDomains.joinToString("\n"))
         BlocklistDatabase.reload()
         return domains
     }

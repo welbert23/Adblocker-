@@ -116,8 +116,10 @@ class DnsPacket(private val buffer: ByteBuffer) {
         adBlockList: Set<String>,
         adultBlockList: Set<String>,
         adultKeywords: Set<String>,
+        gamblingDomains: Set<String>,
         gamblingKeywords: Set<String>,
         customBlockList: Set<String>,
+        importedHosts: Set<String>,
         safeList: Set<String>,
         blockAdult: Boolean,
         whitelist: Set<String> = emptySet()
@@ -148,15 +150,27 @@ class DnsPacket(private val buffer: ByteBuffer) {
             }
             if (inCustom) return@firstNotNullOfOrNull BlockResult(true, "Custom")
 
+            val inImported = importedHosts.any { h ->
+                val clean = h.lowercase().removePrefix("www.")
+                lower == clean || lower.endsWith(".$clean")
+            }
+            if (inImported) return@firstNotNullOfOrNull BlockResult(true, "Imported")
+
             val hasAggressiveKeyword = BlocklistDatabase.AGGRESSIVE_KEYWORDS.any { kw ->
                 lower.contains(kw.lowercase())
             }
             if (hasAggressiveKeyword) return@firstNotNullOfOrNull BlockResult(true, "Aggressive keyword")
 
+            val inGamblingDomain = gamblingDomains.any { gd ->
+                val clean = gd.lowercase().removePrefix("www.")
+                lower == clean || lower.endsWith(".$clean")
+            }
+            if (inGamblingDomain) return@firstNotNullOfOrNull BlockResult(true, "Gambling")
+
             val hasGamblingKeyword = gamblingKeywords.any { kw ->
                 lower.contains(kw.lowercase())
             }
-            if (hasGamblingKeyword) return@firstNotNullOfOrNull BlockResult(true, "Gambling")
+            if (hasGamblingKeyword) return@firstNotNullOfOrNull BlockResult(true, "Gambling keyword")
 
             if (blockAdult) {
                 val isAdult = adultBlockList.any { adult ->
