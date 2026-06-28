@@ -5,6 +5,8 @@ import java.nio.ByteBuffer
 
 object IpUtil {
 
+    const val IPV6_HEADER_LEN = 40
+
     fun ipVersion(pkt: ByteArray): Int = (pkt[0].toInt() shr 4) and 0x0F
 
     fun ipHeaderLen(pkt: ByteArray): Int = (pkt[0].toInt() and 0x0F) * 4
@@ -22,6 +24,23 @@ object IpUtil {
     fun dstIp(pkt: ByteArray): ByteArray {
         val ip = ByteArray(4)
         System.arraycopy(pkt, 16, ip, 0, 4)
+        return ip
+    }
+
+    fun ip6Protocol(pkt: ByteArray): Int = pkt[6].toInt() and 0xFF
+
+    fun ip6PayloadLength(pkt: ByteArray): Int =
+        ((pkt[4].toInt() and 0xFF) shl 8) or (pkt[5].toInt() and 0xFF)
+
+    fun ip6SrcIp(pkt: ByteArray): ByteArray {
+        val ip = ByteArray(16)
+        System.arraycopy(pkt, 8, ip, 0, 16)
+        return ip
+    }
+
+    fun ip6DstIp(pkt: ByteArray): ByteArray {
+        val ip = ByteArray(16)
+        System.arraycopy(pkt, 24, ip, 0, 16)
         return ip
     }
 
@@ -103,7 +122,49 @@ object IpUtil {
         var dstPort: Int = 0
     }
 
-    fun createIpHeader(srcIp: ByteArray, dstIp: ByteArray, protocol: Int, totalLen: Int): ByteArray {
+    private fun tcpPseudoChecksum(srcIp: ByteArray, dstIp: ByteArray, protocol: Int, tcpSegment: ByteArray): Int {
+        val isV6 = srcIp.size == 16
+        val segLen = tcpSegment.size
+        val pseudoLen = if (isV6) 40 + segLen else 12 + segLen
+        val pseudo = ByteBuffer.allocate(pseudoLen)
+        if (isV6) {
+            pseudo.put(srcIp)
+            pseudo.put(dstIp)
+            pseudo.putInt(segLen)
+            pseudo.put(0x00.toByte())
+            pseudo.put(0x00.toByte())
+            pseudo.put(0x00.toByte())
+            pseudo.put(protocol.toByte())
+        } else {
+            pseudo.put(dstIp)
+            pseudo.put(srcIp)
+            pseudo.put(0x00.toByte())
+            pseudo.put(protocol.toByte())
+            pseudo.putShort(segLen.toShort())
+        }
+        pseudo.put(tcpSegment)
+        return tcpChecksum(pseudo.array(), pseudoLen)
+    }
+
+    fun createIp6Header(srcIp: ByteArray, dstIp: ByteArray, protocol: Int, payloadLen: Int): ByteArray {
+        val hdr = ByteBuffer.allocate(40)
+        hdr.put(0x60.toByte())
+        hdr.put(0x00.toByte())
+        hdr.put(0x00.toByte())
+        hdr.put(0x00.toByte())
+        hdr.putShort(payloadLen.toShort())
+        hdr.put(protocol.toByte())
+        hdr.put(64.toByte())
+        hdr.put(srcIp)
+        hdr.put(dstIp)
+        return hdr.array()
+    }
+
+    fun createIpHeader(srcIp: ByteArray, dstIp: ByteArray, protocol: Int, afterIpLen: Int): ByteArray {
+        if (srcIp.size == 16) {
+            return createIp6Header(srcIp, dstIp, protocol, afterIpLen)
+        }
+        val totalLen = 20 + afterIpLen
         val hdr = ByteBuffer.allocate(20)
         hdr.put(0x45.toByte())
         hdr.put(0x00.toByte())
@@ -126,7 +187,6 @@ object IpUtil {
         mss: Int = 1460
     ): ByteArray {
         val tcpLen = 24
-        val totalLen = 20 + tcpLen
         val tcp = ByteBuffer.allocate(tcpLen)
         tcp.putShort(srcPort.toShort())
         tcp.putShort(dstPort.toShort())
@@ -141,18 +201,10 @@ object IpUtil {
         tcp.put(0x04.toByte())
         tcp.putShort(mss.toShort())
 
-        val pseudoLen = 12 + tcpLen
-        val pseudo = ByteBuffer.allocate(pseudoLen)
-        pseudo.put(dstIp)
-        pseudo.put(srcIp)
-        pseudo.put(0x00.toByte())
-        pseudo.put(0x06.toByte())
-        pseudo.putShort(tcpLen.toShort())
-        pseudo.put(tcp.array())
-        val check = tcpChecksum(pseudo.array(), pseudoLen)
+        val check = tcpPseudoChecksum(srcIp, dstIp, 6, tcp.array())
         tcp.putShort(16, check.toShort())
 
-        val ip = createIpHeader(srcIp, dstIp, 6, totalLen)
+        val ip = createIpHeader(srcIp, dstIp, 6, tcpLen)
         return ip + tcp.array()
     }
 
@@ -160,7 +212,6 @@ object IpUtil {
                       srcPort: Int, dstPort: Int,
                       seq: Long, ack: Long): ByteArray {
         val tcpLen = 20
-        val totalLen = 20 + tcpLen
         val tcp = ByteBuffer.allocate(tcpLen)
         tcp.putShort(srcPort.toShort())
         tcp.putShort(dstPort.toShort())
@@ -172,18 +223,10 @@ object IpUtil {
         tcp.putShort(0)
         tcp.putShort(0)
 
-        val pseudoLen = 12 + tcpLen
-        val pseudo = ByteBuffer.allocate(pseudoLen)
-        pseudo.put(dstIp)
-        pseudo.put(srcIp)
-        pseudo.put(0x00.toByte())
-        pseudo.put(0x06.toByte())
-        pseudo.putShort(tcpLen.toShort())
-        pseudo.put(tcp.array())
-        val check = tcpChecksum(pseudo.array(), pseudoLen)
+        val check = tcpPseudoChecksum(srcIp, dstIp, 6, tcp.array())
         tcp.putShort(16, check.toShort())
 
-        val ip = createIpHeader(srcIp, dstIp, 6, totalLen)
+        val ip = createIpHeader(srcIp, dstIp, 6, tcpLen)
         return ip + tcp.array()
     }
 
@@ -195,35 +238,26 @@ object IpUtil {
     ): ByteArray {
         if (data.isEmpty()) return createTcpAck(srcIp, dstIp, srcPort, dstPort, seq, ack)
         val tcpLen = 20
-        val totalLen = 20 + tcpLen + data.size
         val flags = if (fin) 0x19 else 0x18
-        val tcp = ByteBuffer.allocate(tcpLen + data.size)
-        tcp.putShort(srcPort.toShort())
-        tcp.putShort(dstPort.toShort())
-        tcp.putInt((seq and 0xFFFFFFFFL).toInt())
-        tcp.putInt((ack and 0xFFFFFFFFL).toInt())
-        tcp.put(0x50.toByte())
-        tcp.put(flags.toByte())
-        tcp.putShort(65535.toShort())
-        tcp.putShort(0)
-        tcp.putShort(0)
-        tcp.put(data)
+        val tcpBuf = ByteBuffer.allocate(tcpLen + data.size)
+        tcpBuf.putShort(srcPort.toShort())
+        tcpBuf.putShort(dstPort.toShort())
+        tcpBuf.putInt((seq and 0xFFFFFFFFL).toInt())
+        tcpBuf.putInt((ack and 0xFFFFFFFFL).toInt())
+        tcpBuf.put(0x50.toByte())
+        tcpBuf.put(flags.toByte())
+        tcpBuf.putShort(65535.toShort())
+        tcpBuf.putShort(0)
+        tcpBuf.putShort(0)
+        tcpBuf.put(data)
 
-        val pseudoLen = 12 + tcpLen + data.size
-        val pseudo = ByteBuffer.allocate(pseudoLen)
-        pseudo.put(dstIp)
-        pseudo.put(srcIp)
-        pseudo.put(0x00.toByte())
-        pseudo.put(0x06.toByte())
-        pseudo.putShort((tcpLen + data.size).toShort())
-        pseudo.put(tcp.array())
-        val check = tcpChecksum(pseudo.array(), pseudoLen)
-        val buf = tcp.array()
-        buf[16] = (check shr 8).toByte()
-        buf[17] = (check and 0xFF).toByte()
+        val tcpSegment = tcpBuf.array()
+        val check = tcpPseudoChecksum(srcIp, dstIp, 6, tcpSegment)
+        tcpSegment[16] = (check shr 8).toByte()
+        tcpSegment[17] = (check and 0xFF).toByte()
 
-        val ip = createIpHeader(srcIp, dstIp, 6, totalLen)
-        return ip + buf
+        val ip = createIpHeader(srcIp, dstIp, 6, tcpLen + data.size)
+        return ip + tcpSegment
     }
 
     fun createTcpAck(
@@ -232,7 +266,6 @@ object IpUtil {
         seq: Long, ack: Long
     ): ByteArray {
         val tcpLen = 20
-        val totalLen = 20 + tcpLen
         val tcp = ByteBuffer.allocate(tcpLen)
         tcp.putShort(srcPort.toShort())
         tcp.putShort(dstPort.toShort())
@@ -244,18 +277,10 @@ object IpUtil {
         tcp.putShort(0)
         tcp.putShort(0)
 
-        val pseudoLen = 12 + tcpLen
-        val pseudo = ByteBuffer.allocate(pseudoLen)
-        pseudo.put(dstIp)
-        pseudo.put(srcIp)
-        pseudo.put(0x00.toByte())
-        pseudo.put(0x06.toByte())
-        pseudo.putShort(tcpLen.toShort())
-        pseudo.put(tcp.array())
-        val check = tcpChecksum(pseudo.array(), pseudoLen)
+        val check = tcpPseudoChecksum(srcIp, dstIp, 6, tcp.array())
         tcp.putShort(16, check.toShort())
 
-        val ip = createIpHeader(srcIp, dstIp, 6, totalLen)
+        val ip = createIpHeader(srcIp, dstIp, 6, tcpLen)
         return ip + tcp.array()
     }
 

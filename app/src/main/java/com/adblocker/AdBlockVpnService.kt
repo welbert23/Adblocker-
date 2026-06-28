@@ -311,25 +311,45 @@ class AdBlockVpnService : VpnService() {
     private fun processPacket(pkt: ByteArray) {
         try {
             val version = IpUtil.ipVersion(pkt)
-            if (version != 4) return
-            val ihl = IpUtil.ipHeaderLen(pkt)
-            if (ihl < 20 || ihl > pkt.size) return
-            val proto = IpUtil.protocol(pkt)
-            val srcIp = IpUtil.srcIp(pkt)
-            val dstIp = IpUtil.dstIp(pkt)
-
-            if (proto == 17) {
-                val srcPort = IpUtil.srcPort(pkt, ihl)
-                val dstPort = IpUtil.dstPort(pkt, ihl)
-                if (dstPort == 53) {
-                    handleDns(pkt, pkt.size, ihl)
-                } else {
-                    forwardUdp(pkt, srcIp, dstIp, srcPort, dstPort)
-                }
-            } else if (proto == 6) {
-                handleTcp(pkt, srcIp, dstIp, ihl)
+            if (version == 4) {
+                processPacket4(pkt)
+            } else if (version == 6) {
+                processPacket6(pkt)
             }
         } catch (_: Exception) {}
+    }
+
+    private fun processPacket4(pkt: ByteArray) {
+        val ihl = IpUtil.ipHeaderLen(pkt)
+        if (ihl < 20 || ihl > pkt.size) return
+        val proto = IpUtil.protocol(pkt)
+        val srcIp = IpUtil.srcIp(pkt)
+        val dstIp = IpUtil.dstIp(pkt)
+        handleTransport(proto, pkt, srcIp, dstIp, ihl)
+    }
+
+    private fun processPacket6(pkt: ByteArray) {
+        if (pkt.size < 40) return
+        val proto = IpUtil.ip6Protocol(pkt)
+        val srcIp = IpUtil.ip6SrcIp(pkt)
+        val dstIp = IpUtil.ip6DstIp(pkt)
+        handleTransport(proto, pkt, srcIp, dstIp, 40)
+    }
+
+    private fun handleTransport(proto: Int, pkt: ByteArray, srcIp: ByteArray, dstIp: ByteArray, ihl: Int) {
+        if (proto == 17) {
+            val srcPort = IpUtil.srcPort(pkt, ihl)
+            val dstPort = IpUtil.dstPort(pkt, ihl)
+            if (dstPort == 53) {
+                handleDns(pkt, pkt.size, ihl)
+            } else if (dstPort == 443) {
+                return
+            } else {
+                forwardUdp(pkt, srcIp, dstIp, srcPort, dstPort)
+            }
+        } else if (proto == 6) {
+            handleTcp(pkt, srcIp, dstIp, ihl)
+        }
     }
 
     private fun forwardUdp(pkt: ByteArray, srcIp: ByteArray, dstIp: ByteArray, srcPort: Int, dstPort: Int) {
@@ -374,6 +394,14 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun buildUdpResponse(srcIp: ByteArray, dstIp: ByteArray, srcPort: Int, dstPort: Int, data: ByteArray): ByteArray {
+        return if (srcIp.size == 16) {
+            buildUdp6Response(dstIp, srcIp, dstPort, srcPort, data)
+        } else {
+            buildUdp4Response(srcIp, dstIp, srcPort, dstPort, data)
+        }
+    }
+
+    private fun buildUdp4Response(srcIp: ByteArray, dstIp: ByteArray, srcPort: Int, dstPort: Int, data: ByteArray): ByteArray {
         val ipLen = 20; val udpLen = 8; val total = ipLen + udpLen + data.size
         val b = ByteBuffer.allocate(total)
         b.put(0x45.toByte()); b.put(0x00.toByte())
@@ -387,6 +415,22 @@ class AdBlockVpnService : VpnService() {
         b.position(ipLen)
         b.putShort(srcPort.toShort()); b.putShort(dstPort.toShort())
         b.putShort((udpLen + data.size).toShort()); b.putShort(0)
+        b.put(data)
+        return b.array()
+    }
+
+    private fun buildUdp6Response(srcIp: ByteArray, dstIp: ByteArray, srcPort: Int, dstPort: Int, data: ByteArray): ByteArray {
+        val udpLen = 8 + data.size
+        val total = 40 + udpLen
+        val b = ByteBuffer.allocate(total)
+        b.put(0x60.toByte()); b.put(0x00.toByte()); b.put(0x00.toByte()); b.put(0x00.toByte())
+        b.putShort(4, udpLen.toShort())
+        b.put(6, 17.toByte()); b.put(7, 64.toByte())
+        b.position(8); b.put(srcIp)
+        b.position(24); b.put(dstIp)
+        b.position(40)
+        b.putShort(srcPort.toShort()); b.putShort(dstPort.toShort())
+        b.putShort(udpLen.toShort()); b.putShort(0)
         b.put(data)
         return b.array()
     }
@@ -615,19 +659,16 @@ class AdBlockVpnService : VpnService() {
 
     private fun handleDns(pkt: ByteArray, len: Int, ihl: Int) {
         try {
-            val buf = ByteBuffer.wrap(pkt, 0, len)
-            val totalLen = buf.getShort(2).toInt() and 0xFFFF
-            val srcIp = ByteArray(4); val dstIp = ByteArray(4)
-            buf.position(12); buf.get(srcIp)
-            buf.position(16); buf.get(dstIp)
+            val isV6 = ihl == 40
+            val srcIp = if (isV6) IpUtil.ip6SrcIp(pkt) else IpUtil.srcIp(pkt)
+            val dstIp = if (isV6) IpUtil.ip6DstIp(pkt) else IpUtil.dstIp(pkt)
             val srcPort = IpUtil.srcPort(pkt, ihl)
 
             val dnsStart = ihl + 8
-            val dnsLen = totalLen - dnsStart
+            val dnsLen = len - dnsStart
             if (dnsLen <= 12) return
-            buf.position(dnsStart)
             val dnsData = ByteArray(dnsLen)
-            buf.get(dnsData)
+            System.arraycopy(pkt, dnsStart, dnsData, 0, dnsLen)
 
             val dnsPkt = DnsPacket(ByteBuffer.wrap(dnsData))
             if (dnsPkt.isResponse) return
@@ -646,7 +687,7 @@ class AdBlockVpnService : VpnService() {
             if (blockResult.blocked) {
                 val domain = (dnsPkt.questions.firstOrNull() ?: "unknown").lowercase().removePrefix("www.")
                 val resp = dnsPkt.asResponse("0.0.0.0")
-                writeDnsResponse(srcIp, srcPort, dstIp, 53, resp)
+                writeDnsResponse(srcIp, srcPort, dstIp, 53, resp, isV6)
                 blockedCount.incrementAndGet()
                 lastBlockedDomain = domain
                 addLogEntry(domain, blockResult.reason)
@@ -654,7 +695,7 @@ class AdBlockVpnService : VpnService() {
                 saveBlockStats(domain)
             } else if (dnsPkt.questionTypes.any { it == 64 || it == 65 }) {
                 val resp = dnsPkt.asEmptyResponse()
-                writeDnsResponse(srcIp, srcPort, dstIp, 53, resp)
+                writeDnsResponse(srcIp, srcPort, dstIp, 53, resp, isV6)
             } else {
                 val sock = DatagramSocket()
                 try {
@@ -665,30 +706,46 @@ class AdBlockVpnService : VpnService() {
                     sock.receive(rp)
                     val rd = ByteArray(rp.length)
                     System.arraycopy(rb, 0, rd, 0, rp.length)
-                    writeDnsResponse(srcIp, srcPort, dstIp, 53, ByteBuffer.wrap(rd))
+                    writeDnsResponse(srcIp, srcPort, dstIp, 53, ByteBuffer.wrap(rd), isV6)
                 } catch (_: Exception) {} finally { sock.close() }
             }
         } catch (_: Exception) {}
     }
 
-    private fun writeDnsResponse(srcIp: ByteArray, srcPort: Int, dstIp: ByteArray, dstPort: Int, payload: ByteBuffer) {
+    private fun writeDnsResponse(srcIp: ByteArray, srcPort: Int, dstIp: ByteArray, dstPort: Int, payload: ByteBuffer, isV6: Boolean = false) {
         val out = tunOutput ?: return
         try {
-            val ipLen = 20; val udpLen = 8; val total = ipLen + udpLen + payload.remaining()
-            val b = ByteBuffer.allocate(total)
-            b.put(0x45.toByte()); b.put(0x00.toByte())
-            b.putShort(2, total.toShort()); b.putInt(4, 0)
-            b.put(8, 64.toByte()); b.put(9, 17.toByte()); b.putShort(10, 0)
-            b.position(12); b.put(dstIp); b.position(16); b.put(srcIp)
-            var sum = 0L
-            for (i in 0 until ipLen step 2) sum += (b.getShort(i).toInt() and 0xFFFF).toLong()
-            while ((sum shr 16) > 0) sum = (sum and 0xFFFF) + (sum shr 16)
-            b.putShort(10, ((sum.toInt() xor 0xFFFF) and 0xFFFF).toShort())
-            b.position(ipLen)
-            b.putShort(dstPort.toShort()); b.putShort(srcPort.toShort())
-            b.putShort((udpLen + payload.remaining()).toShort()); b.putShort(0)
-            b.put(payload)
-            synchronized(outputLock) { out.write(b.array(), 0, total); out.flush() }
+            if (isV6) {
+                val udpLen = 8 + payload.remaining()
+                val total = 40 + udpLen
+                val b = ByteBuffer.allocate(total)
+                b.put(0x60.toByte()); b.put(0x00.toByte()); b.put(0x00.toByte()); b.put(0x00.toByte())
+                b.putShort(4, udpLen.toShort())
+                b.put(6, 17.toByte()); b.put(7, 64.toByte())
+                b.position(8); b.put(dstIp)
+                b.position(24); b.put(srcIp)
+                b.position(40)
+                b.putShort(dstPort.toShort()); b.putShort(srcPort.toShort())
+                b.putShort(udpLen.toShort()); b.putShort(0)
+                b.put(payload)
+                synchronized(outputLock) { out.write(b.array(), 0, total); out.flush() }
+            } else {
+                val ipLen = 20; val udpLen = 8; val total = ipLen + udpLen + payload.remaining()
+                val b = ByteBuffer.allocate(total)
+                b.put(0x45.toByte()); b.put(0x00.toByte())
+                b.putShort(2, total.toShort()); b.putInt(4, 0)
+                b.put(8, 64.toByte()); b.put(9, 17.toByte()); b.putShort(10, 0)
+                b.position(12); b.put(dstIp); b.position(16); b.put(srcIp)
+                var sum = 0L
+                for (i in 0 until ipLen step 2) sum += (b.getShort(i).toInt() and 0xFFFF).toLong()
+                while ((sum shr 16) > 0) sum = (sum and 0xFFFF) + (sum shr 16)
+                b.putShort(10, ((sum.toInt() xor 0xFFFF) and 0xFFFF).toShort())
+                b.position(ipLen)
+                b.putShort(dstPort.toShort()); b.putShort(srcPort.toShort())
+                b.putShort((udpLen + payload.remaining()).toShort()); b.putShort(0)
+                b.put(payload)
+                synchronized(outputLock) { out.write(b.array(), 0, total); out.flush() }
+            }
         } catch (_: Exception) {}
     }
 

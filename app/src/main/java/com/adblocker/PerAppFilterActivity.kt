@@ -11,9 +11,12 @@ class PerAppFilterActivity : AppCompatActivity() {
 
     private lateinit var appListContainer: LinearLayout
     private lateinit var searchInput: EditText
+    private lateinit var chkSelectAll: CheckBox
     private var allApps: List<AppInfo> = emptyList()
     private var filteredApps: List<AppInfo> = emptyList()
     private var blockedApps: Set<String> = emptySet()
+    private var checkboxes: MutableMap<String, CheckBox> = mutableMapOf()
+    private var ignoreSelectAll = false
 
     data class AppInfo(val name: String, val packageName: String, val icon: android.graphics.drawable.Drawable)
 
@@ -23,6 +26,7 @@ class PerAppFilterActivity : AppCompatActivity() {
 
         appListContainer = findViewById(R.id.appListContainer)
         searchInput = findViewById(R.id.searchInput)
+        chkSelectAll = findViewById(R.id.chkSelectAll)
 
         val prefs = getSharedPreferences("blockerplus", MODE_PRIVATE)
         blockedApps = BlocklistDatabase.loadBlockedApps(prefs)
@@ -46,6 +50,14 @@ class PerAppFilterActivity : AppCompatActivity() {
             }
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
+
+        chkSelectAll.setOnCheckedChangeListener { _, isChecked ->
+            if (ignoreSelectAll) return@setOnCheckedChangeListener
+            for (app in filteredApps) {
+                val cb = checkboxes[app.packageName] ?: continue
+                cb.isChecked = isChecked
+            }
+        }
     }
 
     private fun loadApps() {
@@ -73,6 +85,7 @@ class PerAppFilterActivity : AppCompatActivity() {
     }
 
     private fun renderAppList() {
+        checkboxes.clear()
         appListContainer.removeAllViews()
         for (app in filteredApps) {
             val row = LinearLayout(this).apply {
@@ -117,8 +130,10 @@ class PerAppFilterActivity : AppCompatActivity() {
                 setOnCheckedChangeListener { _, isChecked ->
                     if (isChecked) blockedApps = blockedApps + app.packageName
                     else blockedApps = blockedApps - app.packageName
+                    updateSelectAllState()
                 }
             }
+            checkboxes[app.packageName] = check
 
             row.setOnClickListener { check.isChecked = !check.isChecked }
             row.addView(icon)
@@ -139,5 +154,21 @@ class PerAppFilterActivity : AppCompatActivity() {
                 )
             }.let { appListContainer.addView(it) }
         }
+        updateSelectAllState()
+    }
+
+    private fun updateSelectAllState() {
+        if (filteredApps.isEmpty()) {
+            ignoreSelectAll = true
+            chkSelectAll.isChecked = false
+            chkSelectAll.isEnabled = false
+            ignoreSelectAll = false
+            return
+        }
+        chkSelectAll.isEnabled = true
+        val allChecked = filteredApps.all { blockedApps.contains(it.packageName) }
+        ignoreSelectAll = true
+        chkSelectAll.isChecked = allChecked
+        ignoreSelectAll = false
     }
 }
